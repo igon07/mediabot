@@ -1,0 +1,6 @@
+danbot.db
+.env
+*.json
+__pycache__/
+*.pyc
+discord.log
