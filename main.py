@@ -240,12 +240,14 @@ def main():
                 ext = "gif"
             item_id = str(only["id"])
             filepath = os.path.join(DIRECTORY, f"{item_id}.{ext}")
-            ensure_file_logged(item_id, filepath)
+            score = only.get("score", 0)
+            ensure_file_logged(item_id, filepath, score=score)
             save_tags(item_id, [only])
         else:
             item_id = str(root_id)
             filepath = folder
-            ensure_file_logged(item_id, filepath)
+            score = max(p.get("score", 0) for p in downloadable)
+            ensure_file_logged(item_id, filepath, score=score)
             save_tags(item_id, downloadable)
 
 

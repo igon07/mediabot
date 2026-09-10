@@ -40,6 +40,10 @@ def init_db():
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id ON post_tags(tag_id)
     """)
+    try:
+        cur.execute("ALTER TABLE files ADD COLUMN score INTEGER")
+    except:
+        pass
     conn.commit()
     conn.close()
 
@@ -67,18 +71,18 @@ def save_tags(item_id, posts):
     conn.commit()
     conn.close()
 
-def ensure_file_logged(item_id, filepath):
+def ensure_file_logged(item_id, filepath, score=None):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT filepath FROM files WHERE id = ?", (item_id,))
     row = cur.fetchone()
     if row is None:
         cur.execute(
-            "INSERT INTO files (id, filepath, added_at) VALUES (?, ?, ?)",
-            (item_id, filepath, datetime.now(timezone.utc).isoformat())
+            "INSERT INTO files (id, filepath, added_at, score) VALUES (?, ?, ?, ?)",
+            (item_id, filepath, datetime.now(timezone.utc).isoformat(), score)
         )
     elif row[0] != filepath:
-        cur.execute("UPDATE files SET filepath = ? WHERE id = ?", (filepath, item_id))
+        cur.execute("UPDATE files SET filepath = ?, score = ? WHERE id = ?", (filepath, score, item_id))
     conn.commit()
     conn.close()
 
@@ -167,6 +171,14 @@ def get_top_requested_tags(limit=20, offset=0, category=None):
     rows = cur.fetchall()
     conn.close()
     return rows  # list of (tag_name, req_count)
+
+def get_top_files_by_score(limit=20, offset=0):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, score FROM files ORDER BY score DESC LIMIT ? OFFSET ?", (limit, offset))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 def get_total_request_count():
     conn = get_connection()

@@ -142,16 +142,20 @@ class MenuListView(View):
         toptags_btn.callback = self.make_toptags_callback(offset = 0)
         self.add_item(toptags_btn)
 
-        topfiles_btn = Button(label="Top Files", style=discord.ButtonStyle.primary)
+        topfiles_btn = Button(label="Top Files RQS", style=discord.ButtonStyle.primary)
         topfiles_btn.callback = self.make_topfiles_callback(offset = 0)
         self.add_item(topfiles_btn)
+
+        topfilescore_btn = Button(label="Top Files SCORE", style=discord.ButtonStyle.primary)
+        topfilescore_btn.callback = self.make_topfilescore_callback(offset = 0)
+        self.add_item(topfilescore_btn)
 
         stats_btn = Button(label="Bot Stats", style=discord.ButtonStyle.primary)
         stats_btn.callback = self.make_stats_callback()
         self.add_item(stats_btn)
 
 
-    def make_tags_callback(self, offset, category):
+    def make_tags_callback(self, offset=0, category=None):
         async def callback(interaction):
             back_target = NavTarget(
             lambda: MenuListView(),
@@ -187,6 +191,17 @@ class MenuListView(View):
             new_view = FileListView(offset=offset, back_target=back_target, sorting=True)
             new_view.message = interaction.message
             await interaction.response.edit_message(content=f"Top Files by Requests:", view=new_view)          
+        return callback
+
+    def make_topfilescore_callback(self, offset=0):
+        async def callback(interaction):
+            back_target = NavTarget(
+            lambda: MenuListView(),
+            f"epic menu"
+            )
+            new_view = FileListView(offset=offset, back_target=back_target, sorting=False, scoring=True)
+            new_view.message = interaction.message
+            await interaction.response.edit_message(content=f"Top Files by Score:", view=new_view)          
         return callback
 
     def make_stats_callback(self):
@@ -287,15 +302,18 @@ class TagListView(View):
         return callback
 
 class FileListView(View):
-    def __init__(self, tag_id=None, tag_name=None, offset=0, back_target=None, sorting=False):
+    def __init__(self, tag_id=None, tag_name=None, offset=0, back_target=None, sorting=False, scoring=False):
         super().__init__(timeout=120)
         self.tag_id = tag_id
         self.tag_name = tag_name
         self.offset = offset
         self.back_target = back_target
         self.sorting = sorting
+        self.scoring = scoring
         if self.sorting:
             self.file_ids = db.get_top_requested_files(limit=20, offset=self.offset)
+        elif self.scoring:
+            self.file_ids = db.get_top_files_by_score(limit=20, offset=self.offset)
         else:
             self.file_ids = db.get_files_for_tag(tag_id, limit=20, offset=self.offset)
         self.message = None
@@ -337,7 +355,7 @@ class FileListView(View):
 
     def make_page_callback(self, new_offset):
         async def callback(interaction):
-            new_view = FileListView(self.tag_id, self.tag_name, back_target=self.back_target, offset=new_offset, sorting=self.sorting)
+            new_view = FileListView(self.tag_id, self.tag_name, back_target=self.back_target, offset=new_offset, sorting=self.sorting, scoring=self.scoring)
             new_view.message = interaction.message
             if not self.tag_name:
                 await interaction.response.edit_message(content=f"Top Files: ", view=new_view)
@@ -348,7 +366,7 @@ class FileListView(View):
     def make_file_callback(self, file_id):
         async def callback(interaction):
             back_target = NavTarget(
-                lambda: FileListView(self.tag_id, self.tag_name, offset=self.offset, back_target=self.back_target, sorting=self.sorting),
+                lambda: FileListView(self.tag_id, self.tag_name, offset=self.offset, back_target=self.back_target, sorting=self.sorting, scoring=self.scoring),
                 f"Top Files: " if not self.tag_name else f"Files tagged '{self.tag_name}':" 
             )            
             await open_file_viewer(interaction, file_id, back_target)
