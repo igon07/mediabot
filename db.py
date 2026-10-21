@@ -74,15 +74,19 @@ def save_tags(item_id, posts):
 def ensure_file_logged(item_id, filepath, score=None):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT filepath FROM files WHERE id = ?", (item_id,))
+    cur.execute("SELECT filepath, score FROM files WHERE id = ?", (item_id,))
     row = cur.fetchone()
     if row is None:
         cur.execute(
             "INSERT INTO files (id, filepath, added_at, score) VALUES (?, ?, ?, ?)",
             (item_id, filepath, datetime.now(timezone.utc).isoformat(), score)
         )
-    elif row[0] != filepath:
-        cur.execute("UPDATE files SET filepath = ?, score = ? WHERE id = ?", (filepath, score, item_id))
+    else:
+        existing_filepath, existing_score = row
+        new_filepath = filepath if filepath != existing_filepath else existing_filepath
+        new_score = score if score is not None else existing_score
+        if new_filepath != existing_filepath or new_score != existing_score:
+            cur.execute("UPDATE files SET filepath = ?, score = ? WHERE id = ?", (new_filepath, new_score, item_id))
     conn.commit()
     conn.close()
 

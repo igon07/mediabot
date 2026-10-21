@@ -31,7 +31,7 @@ def backfill():
 
         ensure_file_logged(item_id, full_path, score=score)
         save_tags(item_id, downloadable)
-        time.sleep(0.3)
+        time.sleep(0.2)
 
     print("backfill complete")
 

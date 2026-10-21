@@ -48,37 +48,41 @@ def diriterate(path, file):
     return files
 
 def get_valid_filepaths(path):
+    skipped = []
+    paths = []
     if os.path.isfile(path):
         if (os.path.getsize(path)/ (1024**2) >= 10):
             print(f" file of id: {os.path.basename(path)} is too big")
-        return [path]
-    paths = []
+            skipped.append(os.path.basename(path))
+        else: paths.append(path)
+        return paths, skipped
     for entry in os.scandir(path):
         if entry.is_file():
             if (entry.stat().st_size / (1024**2) >= 10) or zipfile.is_zipfile(entry.path):
                 print(f"of id: {os.path.basename(path)}, skipped: {os.path.basename(entry)}")
+                skipped.append(os.path.basename(entry))
                 continue
             paths.append(entry.path)
         elif entry.is_dir():
             paths.extend(get_valid_filepaths(entry.path))
-    return paths
+    return paths, skipped
 
 async def open_file_viewer(interaction, file_id, back_target):
     await interaction.response.defer()
     filepath = db.get_filepath(file_id)
     if not filepath or not os.path.exists(filepath):
-        await interaction.response.edit_message(content=f"File not found. id: {file_id}", attachments=[], view=BackOnlyView(back_target))
+        await interaction.edit_original_response(content=f"File not found. id: {file_id}", attachments=[], view=BackOnlyView(back_target))
         return
 
-    filepaths = get_valid_filepaths(filepath)
+    filepaths, skipped = get_valid_filepaths(filepath)
     if not filepaths:
-        await interaction.response.edit_message(content="No valid files (empty or all too big).", attachments=[], view=BackOnlyView(back_target))
+        await interaction.edit_original_response(content="No valid files (empty or all too big).", attachments=[], view=BackOnlyView(back_target))
         return
-
+    
     view = FileBatchView(file_id, filepaths, batch_index=0, back_target=back_target)
     first_files = [discord.File(p) for p in view.batches[0]]
     view.message = interaction.message
-    await interaction.edit_original_response(content=file_id, attachments=first_files, view=view)
+    await interaction.edit_original_response(content=file_id + f"  {len(skipped)} file(s) too big to be sent" if skipped else file_id, attachments=first_files, view=view)
     db.log_request(file_id, interaction.user.id)
 
 class NavTarget:
@@ -109,6 +113,7 @@ class BackOnlyView(View):
 
     def make_back_callback(self):
         async def callback(interaction):
+            self.stop()
             new_view = self.back_target.build()
             new_view.message = interaction.message
             await interaction.response.edit_message(content=self.back_target.content, embed=None, attachments=[], view=new_view)
@@ -157,6 +162,7 @@ class MenuListView(View):
 
     def make_tags_callback(self, offset=0, category=None):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
             lambda: MenuListView(),
             f"epic menu"
@@ -173,6 +179,7 @@ class MenuListView(View):
 
     def make_toptags_callback(self, offset=0):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
             lambda: MenuListView(),
             f"epic menu"
@@ -184,6 +191,7 @@ class MenuListView(View):
 
     def make_topfiles_callback(self, offset=0):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
             lambda: MenuListView(),
             f"epic menu"
@@ -195,6 +203,7 @@ class MenuListView(View):
 
     def make_topfilescore_callback(self, offset=0):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
             lambda: MenuListView(),
             f"epic menu"
@@ -215,7 +224,7 @@ class MenuListView(View):
             embed.add_field(name="Total Files", value=str(total_files), inline=True)
             embed.add_field(name="Total Requests", value=str(total_requests), inline=True)
             embed.add_field(name="Total Size", value=f"{size_gb:.2f} GB", inline=True)
-
+            self.stop()
             back_target = NavTarget(
                 lambda: MenuListView(),
                 f"epic menu"
@@ -277,6 +286,7 @@ class TagListView(View):
 
     def make_page_callback(self, new_offset):
         async def callback(interaction):
+            self.stop()
             new_view = TagListView(offset=new_offset, back_target=self.back_target, category=self.category, sorting=self.sorting)
             new_view.message = interaction.message
             mything = self.make_title()
@@ -285,6 +295,7 @@ class TagListView(View):
     
     def make_back_callback(self):
         async def callback(interaction):
+            self.stop()
             new_view = self.back_target.build()
             new_view.message = interaction.message
             await interaction.response.edit_message(content=self.back_target.content, attachments=[], view=new_view)
@@ -292,6 +303,7 @@ class TagListView(View):
     
     def make_tag_callback(self, tag_id, tag_name):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
             lambda: TagListView(offset=self.offset, category=self.category, sorting=self.sorting, back_target=self.back_target),
             self.make_title()
@@ -355,6 +367,7 @@ class FileListView(View):
 
     def make_page_callback(self, new_offset):
         async def callback(interaction):
+            self.stop()
             new_view = FileListView(self.tag_id, self.tag_name, back_target=self.back_target, offset=new_offset, sorting=self.sorting, scoring=self.scoring)
             new_view.message = interaction.message
             if not self.tag_name:
@@ -365,6 +378,7 @@ class FileListView(View):
     
     def make_file_callback(self, file_id):
         async def callback(interaction):
+            self.stop()
             back_target = NavTarget(
                 lambda: FileListView(self.tag_id, self.tag_name, offset=self.offset, back_target=self.back_target, sorting=self.sorting, scoring=self.scoring),
                 f"Top Files: " if not self.tag_name else f"Files tagged '{self.tag_name}':" 
@@ -529,6 +543,7 @@ class FileBatchView(View):
 
     def make_page_callback(self, new_index):
         async def callback(interaction):
+            self.stop()
             new_view = FileBatchView(self.file_id, self.filepaths, batch_index=new_index, back_target=self.back_target)
             new_view.message = interaction.message
             fresh_files = [discord.File(p) for p in new_view.batches[new_index]]
@@ -537,6 +552,7 @@ class FileBatchView(View):
     
     def make_back_callback(self):
         async def callback(interaction):
+            self.stop()
             new_view = self.back_target.build()
             new_view.message = interaction.message
             await interaction.response.edit_message(content=self.back_target.content, attachments=[], view=new_view)
